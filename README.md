@@ -10,9 +10,14 @@ in future iterations of the applicaiton it will be useful to
 use git version controle. 
 
 ### Commands
-start
-stop
-restart
-freeze | add <file>
-thaw | remove <file>
+
+**start**
+
+**stop**
+
+**restart**
+
+**freeze | add {file}**
+
+**thaw | remove {file}**
 

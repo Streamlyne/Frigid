@@ -1,0 +1,10 @@
+actionid=tox
+msg=packaging
+cmdargs=['/Users/dawson/.virtualenvs/frigid/bin/python', local('/Users/dawson/Streamlyne/frigid/setup.py'), 'sdist', '--formats=zip', '--dist-dir', local('/Users/dawson/Streamlyne/frigid/.tox/dist')]
+env=None
+running sdist
+running egg_info
+writing Frigid.egg-info/PKG-INFO
+writing top-level names to Frigid.egg-info/top_level.txt
+writing dependency_links to Frigid.egg-info/dependency_links.txt
+error: package directory 'test' does not exist
