@@ -6,7 +6,14 @@ from __future__ import (
 __author__='Dawson Reid'
 from pprint import pprint
 
-import sys, yaml, time, sh, atexit
+import sys
+import yaml 
+import time
+import sh
+import atexit
+import logging
+import argparse
+
 from signal import SIGTERM 
 
 from watchdog.observers import Observer
@@ -14,47 +21,74 @@ from watchdog.events import FileSystemEventHandler
 
 
 class Daemon(object):
-	"""
+	'''!
 	A generic daemon class.
 	
 	Usage: subclass the Daemon class and override the run() method
-	"""
-	def __init__(self, pidfile, stdin='/dev/null', stdout='/dev/null', stderr='/dev/null'):
+	'''
+
+    @property
+    def pidfile(self):
+        '''!
+        Attains the current process pid.
+        '''
+        try:
+			pf = file(self.pidfile,'r')
+			pid = int(pf.read().strip())
+			pf.close()
+            return pid
+		except IOError:
+			return None
+	
+
+	def __init__(self, pid_file, 
+            cmd_file='/etc/frigid/cmd.pipe',
+            log_file='/etc/frigid/f.log',
+            stdin='/dev/null', stdout='/dev/null', stderr='/dev/null'):
+        '''!
+        '''
 		self.stdin = stdin
 		self.stdout = stdout
 		self.stderr = stderr
 		self.pidfile = pidfile
-	
-	def daemonize(self):
-		"""
-		do the UNIX double-fork magic, see Stevens' "Advanced 
-		Programming in the UNIX Environment" for details (ISBN 0201563177)
-		http://www.erlenstar.demon.co.uk/unix/faq_2.html#SEC16
-		"""
-		try: 
+
+        # setup logging
+        logging.basicConfig(filename=log_file, level=logging.DEBUG)
+
+    
+    def _fork(self):
+        '''!
+        Forks the current process.
+        '''
+        logging.info('Forking.')
+
+        try: 
 			pid = os.fork() 
 			if pid > 0:
 				# exit first parent
 				sys.exit(0) 
 		except OSError, e: 
-			sys.stderr.write("fork #1 failed: %d (%s)\n" % (e.errno, e.strerror))
+			sys.stderr.write("fork failed: %d (%s)\n" % (e.errno, e.strerror))
 			sys.exit(1)
+	
+    
+    def daemonize(self):
+		"""
+		do the UNIX double-fork magic, see Stevens' "Advanced 
+		Programming in the UNIX Environment" for details (ISBN 0201563177)
+		http://www.erlenstar.demon.co.uk/unix/faq_2.html#SEC16
+		"""
+        # fork 1
+	    self._fork()	
 	
 		# decouple from parent environment
 		os.chdir("/") 
 		os.setsid() 
 		os.umask(0) 
 	
-		# do second fork
-		try: 
-			pid = os.fork() 
-			if pid > 0:
-				# exit from second parent
-				sys.exit(0) 
-		except OSError, e: 
-			sys.stderr.write("fork #2 failed: %d (%s)\n" % (e.errno, e.strerror))
-			sys.exit(1) 
-	
+		# fork 2
+        self._fork()
+
 		# redirect standard file descriptors
 		sys.stdout.flush()
 		sys.stderr.flush()
@@ -69,23 +103,19 @@ class Daemon(object):
 		atexit.register(self.delpid)
 		pid = str(os.getpid())
 		file(self.pidfile,'w+').write("%s\n" % pid)
-	
+
+
 	def delpid(self):
 		os.remove(self.pidfile)
+
 
 	def start(self):
 		"""
 		Start the daemon
 		"""
 		# Check for a pidfile to see if the daemon already runs
-		try:
-			pf = file(self.pidfile,'r')
-			pid = int(pf.read().strip())
-			pf.close()
-		except IOError:
-			pid = None
-	
-		if pid:
+        pid = self.pidfile
+        if pid:
 			message = "pidfile %s already exist. Daemon already running?\n"
 			sys.stderr.write(message % self.pidfile)
 			sys.exit(1)
@@ -94,18 +124,14 @@ class Daemon(object):
 		self.daemonize()
 		self.run()
 
+
 	def stop(self):
 		"""
 		Stop the daemon
 		"""
 		# Get the pid from the pidfile
-		try:
-			pf = file(self.pidfile,'r')
-			pid = int(pf.read().strip())
-			pf.close()
-		except IOError:
-			pid = None
-	
+        pid = self.pidfile
+
 		if not pid:
 			message = "pidfile %s does not exist. Daemon not running?\n"
 			sys.stderr.write(message % self.pidfile)
@@ -125,12 +151,14 @@ class Daemon(object):
 				print(str(err))
 				sys.exit(1)
 
+
 	def restart(self):
 		"""
 		Restart the daemon
 		"""
 		self.stop()
 		self.start()
+
 
 	def run(self):
 		"""
@@ -154,15 +182,19 @@ class FileModifiedHandler(FileSystemEventHandler):
         print("Got it!")
 
 
-class FreezeDaemon(Daemon):
+class FrigidDaemon(Daemon):
     '''!
     '''
 
-    def run(self):
+    def __init__(self, )
+        '''!
+        '''
+        super(FrigidDaemon, self).__init__()
 
-        # load config file
-        config = yaml.load(open('/etc/freeze/config.yml', 'r'))
-        pprint(config)
+        # load config
+        self._config = yaml.load(open('/etc/frigid/config.yml', 'r'))
+
+    def run(self):
 
         observer = Observer()
         # register all file watcher
@@ -180,11 +212,24 @@ class FreezeDaemon(Daemon):
             time.sleep(1)
 
 
+PARSER = argparse.ArgumentParser(description='''
+    Frigid
+
+    This application is used to freeze files at a current state and 
+    enforce them at that state. 
+    ''')
+PARSER.add_argument('cmd', help='')
+PARSER.add_argument('arg', help='')
+ARGS = PARSER.parse_args()
+
+pprint(ARGS)
+
 def main():
     '''!
     Main method.
     '''
-    d = FreezeDaemon('/tmp/freeze.pid')
+    d = FreezeDaemon(
+            pid_file='/tmp/freeze.pid',)
     
     if len(sys.argv) == 2:
         command = sys.argv[1]
